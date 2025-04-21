@@ -1,0 +1,339 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{listings}
+\usepackage{fancyhdr}
+
+\pagestyle{empty}  % No page numbers, no header/footer
+\usepackage{geometry}
+\geometry{a4paper, left=20mm, right=20mm, top=20mm, bottom=20mm}
+
+\allowdisplaybreaks
+
+\begin{document}
+
+
+Small Notes:
+
+* Functions return nil by default
+
+* nested functions arent allowed
+
+* Function definition points towards a data structure holding, name, parameter names, parameter types, return type, and body
+
+\section*{Grammar Definition}
+
+\begin{lstlisting}[mathescape]
+varDecl ::= "var" IDENTIFIER ":" type ( "=" expression )? ";" ;
+funDecl ::= "fun" function ;
+function ::= IDENTIFIER "(" parameters? ") :" type block ;
+parameters ::= IDENTIFIER":" type ( "," IDENTIFIER ":" type )* ;
+classDecl ::= "class" IDENTIFIER "{" (function | varDecl)* "}" ;
+printStmt ::= "print" expression ";" ;
+block ::= "{" declaration* "}" ;
+ifStmt ::= "if" "(" expression ")" statement ( "else" statement )? ;
+whileStmt ::= "while" "(" expression ")" statement ;
+returnStmt ::= "return" expression ";" ;
+expression ::= primary "=" primary |
+               primary "or" primary |
+               primary "and" primary |
+               primary ("!=" | "==") primary |
+               primary ( ">" | ">=" | "<" | "<=" ) primary |
+               primary ( "-" | "+" | "*" | "/" ) primary |
+               ( "!" | "-" ) primary | call ;
+call ::= primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
+arguments ::= expression ( "," expression )* ;
+primary ::= "true" | "false" | "nil" | "this" | NUMBER | STRING | IDENTIFIER | "(" expression ")" ;
+type ::= "<<" ("string" | "number" | "boolean" | "nil" |
+         "function<" type "<" type? ("," type)* ">>" |
+         "class<" CLASSNAME ">" | CLASSNAME) ">>";
+\end{lstlisting}
+
+\section*{Reduction Rules for Basic Statements}
+\begin{alignat*}{2}
+    &\text{Var Decl} &&\sigma \vdash \text{var } x: \ t = \text{val} \rightarrow \text{void} \dashv \sigma \cup \{x \mapsto \text{val}\} \\\\[10pt]
+    &\text{Var Update} && \underline{x \in \text{dom}(\sigma)} \\ 
+    & && \sigma\{x \mapsto \text{val}_1\} \vdash x := \text{val}_2 \rightarrow \text{void} \dashv \sigma\{x \mapsto \text{val}_2\} \\\\[10pt]
+    &\text{Seq1} && \underline{\sigma \vdash S_1 \rightarrow S_1' \dashv \sigma'} \\ 
+    & && \sigma \vdash S_1; S_2 \rightarrow S_1'; S_2 \dashv \sigma' \\\\[10pt]
+    &\text{Seq2} && \underline{\sigma \vdash S_1 \rightarrow \text{void} \dashv \sigma'} \\ 
+    & && \sigma \vdash S_1; S_2 \rightarrow S_2 \dashv \sigma' \\\\[10pt]
+    &\text{If-True} && \underline{b = \text{true}} \\ 
+    & && \sigma \vdash \text{if } b \text{ then } S_1 \text{ else } S_2 \rightarrow S_1 \dashv \sigma \\\\[10pt]
+    &\text{If-False} && \underline{b = \text{false}} \\ 
+    & && \sigma \vdash \text{if } b \text{ then } S_1 \text{ else } S_2 \rightarrow S_2 \dashv \sigma \\\\[10pt]
+    &\text{While} && \underline{} \\ 
+    & && \sigma \vdash \text{while } b \text{ do } S \rightarrow \text{if } b \text{ then } S; \text{while } b \text{ do } S \text{ else void} \dashv \sigma \\\\[10pt]
+    &\text{BeginScope} && \underline{} \\ 
+    & && \sigma \vdash \text{\{} \rightarrow \text{void} \dashv (\sigma_0 \rightarrow \sigma) \text{new env. maps to prev env.} \\\\[10pt]
+    &\text{EndScope} && \underline{} \\ 
+    & && (\sigma_0 \rightarrow \sigma) \vdash \text{\}} \rightarrow \text{void} \dashv \sigma \\\\[10pt]
+    &\text{Functions} && \underline{f \notin \text{dom}(\sigma)} \\ 
+    & && \sigma \vdash \text{fun f(): t \{\}}\rightarrow \text{void} \dashv \sigma \{f \mapsto F\} \\ 
+    & && \text{where, F holds the tree node having the name, params (types), body, ret type,} \\ 
+    & && \text{and the environment the function declaration statement has occured in}\\\\[10pt]
+    &\text{Function Call} && f \in \text{dom}(\sigma) \\ 
+& && \underline{\text{f has return type t}} \\ 
+& && \sigma \{f \mapsto F\} \vdash \text{f()} \rightarrow t \dashv \sigma \{f \mapsto F\} \\\\[10pt]  
+    & && \text{where, C holds the class name, and fields and methods environment}\\\\[10pt]
+    &\text{Class Decl.} && \underline{c \notin \text{dom}(\sigma)} \\ 
+    & && \sigma \vdash \text{class c \{ f | m\}} \rightarrow \text{$<<$nil$>>$} \dashv \sigma \{c \mapsto C(name, \sigma f, \sigma m\} 
+    \\\\[10pt]
+    &\text{Class Inst. Creation} && \underline{c(name, \sigma f, \sigma m) \in \text{dom}(\sigma) \quad init \in c.\sigma m \vee init \notin c.\sigma m} \\ 
+    & && \sigma \{c\} \vdash \text{var x: $<<$name$>>$ = c()} \rightarrow \text{$<<$nil$>>$} \dashv \sigma \{c \cup x \mapsto c\_inst(c, \sigma f, \sigma m\} 
+    \\\\[10pt]
+    & \\ 
+    & && \text{if x exists in both the field and methods map, then method x is retrieved}\\\\[10pt]
+    &\text{Class Field Retrieval} && \underline{c\_ inst(name, \sigma f, \sigma m) \in \text{dom}(\sigma) \quad x \in c\_inst .\sigma m \vee x \in c\_inst .\sigma f} \\ 
+    & && \sigma \{c\_ inst (name, \sigma f, \sigma m\} \vdash \text{c\_ inst.x} \rightarrow \text{var val or fun data} \dashv \sigma \{c\_ inst (n, \sigma f, \sigma m\} 
+    \\\\[10pt]
+    &\text{Class Field Set} && \underline{c\_ inst(n, \sigma f, \sigma m) \in \text{dom}(\sigma) \quad x \in c\_inst .\sigma f \quad \Gamma (x) = \Gamma (y)} \\ 
+    & && \sigma \{c\_ inst (n, \sigma f, \sigma m\} \vdash \text{c\_inst.x = y} \rightarrow \text{$<<$nil$>>$} \dashv \sigma \{c\_ inst (n, \sigma f, \sigma m\}  
+\end{alignat*}
+
+\section*{Typing Rules for Values}
+
+\[
+\text{T-number} \quad{\Gamma, \Delta \vdash n : \text{$<<$number$>>$}} 
+\]
+
+\[
+\text{T-Var} \quad{\Gamma \{ x \mapsto t \}, \Delta \vdash x : t}
+\]
+
+\[
+\text{T-True} \quad{\Gamma, \Delta \vdash \text{true} : \text{$<<$boolean$>>$}} 
+\]
+
+\[
+\text{T-False} \quad{\Gamma, \Delta \vdash \text{false} : \text{$<<$boolean$>>$}} 
+\]
+
+\[
+\text{T-String} \quad{\Gamma, \Delta \vdash \text{"-"} : \text{$<<$string$>>$}} 
+\]
+
+\[
+\text{T-None} \quad{\Gamma, \Delta \vdash \text{nil} : \text{$<<$nil$>>$}} 
+\]
+
+% \newpage
+\section*{Typing Rules for Arithmetic and Boolean Expressions
+
+\large{in some places, I int represents $<<$number$>>$, string is $<<$string$>>$, Bool is $<<$bool$>>$}
+
+\[
+\text{T-Add} \quad \frac{\Gamma, \Delta \vdash a_1 : \text{int} \quad \Gamma, \Delta \vdash a_2 : \text{int}}{\Gamma, \Delta \vdash a_1 + a_2 : \text{int}} 
+\]
+
+\[
+\text{T-AddStr} \quad \frac{\Gamma, \Delta \vdash a_1 : \tau_1 \quad \Gamma, \Delta \vdash a_2 : \tau_2 \quad (\tau_1, \tau_2 \in \{string, number\}) \quad \text{one is string}}{\Gamma, \Delta \vdash a_1 + a_2 : \text{string}}
+\]
+
+\[
+\text{T-AddInt} \quad \frac{\Gamma, \Delta \vdash a_1 : <<number>> \quad \Gamma, \Delta \vdash a_2 : <<number>>}{\Gamma, \Delta \vdash a_1 + a_2 : \text{string}}
+\]
+
+\[
+\text{T-Sub} \quad \frac{\Gamma, \Delta \vdash a_1 : \text{int} \quad \Gamma \vdash a_2 : \text{int}}{\Gamma, \Delta \vdash a_1 - a_2 : \text{int}} 
+\]
+
+\[
+\text{T-Mult} \quad \frac{\Gamma, \Delta \vdash a_1 : \text{int} \quad \Gamma, \Delta \vdash a_2 : \text{int}}{\Gamma, \Delta \vdash a_1 \times a_2 : \text{int}} 
+\]
+
+\[
+\text{T-Equal} \quad \frac{\Gamma, \Delta \vdash a_1 : \text{anything} \quad \Gamma, \Delta \vdash a_2 : \text{anything}}{\Gamma, \Delta \vdash a_1 == a_2 : \text{Bool}} 
+\]
+
+\[
+\text{T-Not-Equal} \quad \frac{\Gamma, \Delta \vdash a_1 : \text{anything} \quad \Gamma, \Delta \vdash a_2 : \text{anything}}{\Gamma, \Delta \vdash a_1 = a_2 : \text{Bool}} 
+\]
+
+\[
+\text{T-LEqual} \quad \frac{\Gamma, \Delta \vdash a_1 : \text{int} \quad \Gamma, \Delta \vdash a_2 : \text{int}}{\Gamma, \Delta \vdash a_1 \leq a_2 : \text{Bool}} 
+\]
+
+\[
+\text{T-GEqual} \quad \frac{\Gamma, \Delta \vdash b_1 : \text{int} \quad \Gamma, \Delta \vdash b_2 : \text{int}}{\Gamma, \Delta \vdash b_1 \geq a_2 : \text{Bool}} 
+\]
+
+\[
+\text{T-Not} \quad \frac{\Gamma, \Delta \vdash b : \text{anything}}{\Gamma, \Delta \vdash !\text{ }b : \text{Bool}} 
+\]
+
+\[
+\text{T-Negate} \quad \frac{\Gamma, \Delta \vdash b : \text{int}}{\Gamma \vdash - b : \text{int}} 
+\]
+
+\[
+\text{T-Truthiness} \quad \frac{\Gamma, \Delta \vdash a : \tau \quad a \neq \text{nil} \quad a \neq \text{false}}{\Gamma, \Delta \vdash \text{toBool}(a) : \text{true}}
+\]
+
+\[
+\text{T-Falsiness} \quad \frac{\Gamma, \Delta \vdash a : \text{nil or false}}{\Gamma, \Delta \vdash \text{toBool}(a) : \text{false}}
+\]
+
+% \newpage
+\section*{Typing Rules for Simple Statements}
+
+\[
+\text{T-Var Decl.} \quad \frac{\Gamma, \Delta \vdash E : t }{\Gamma, \Delta \vdash var \text{ } x: t = E : <<nil>> \dashv \Gamma \cup \{ x \mapsto t \}, \Delta} 
+\]
+
+\[
+\text{T-Assign} \quad \frac{\Gamma, \Delta \vdash E : t \quad \Gamma, \Delta \vdash \, x : t}{\Gamma \cup \{ x \mapsto t \}, \Delta \vdash x = E : t\dashv \Gamma \cup \{ x \mapsto t \}, \Delta} 
+\]
+
+{\large where n represents $<<$nil$>>$, had to find a way to shorten it because the text kept going out of the page \par}
+
+\[
+\text{T-If} \quad \frac{\Gamma, \Delta \vdash b : \text{Bool} \quad \Gamma, \Delta \vdash S_1 : n \dashv \Gamma \text{'}, \Delta \quad \Gamma_, \Delta \vdash S_2 : n \dashv \Gamma \text{''}, \Delta}{\Gamma, \Delta \vdash \text{if} \, (b) \, \, \{S_1\} \, \text{else} \, \{S_2\} : <<nil>> \dashv \Gamma \cup \Gamma \text{'}, \Delta} 
+\]
+
+\[
+\text{T-While} \quad \frac{\Gamma, \Delta \vdash b : \text{anything} \quad \Gamma, \Delta \vdash S : \text{$<<$nil$>>$} \dashv \Gamma \text{'}, \Delta}{\Gamma, \Delta \vdash \text{while} \, (b) \, \, \{S\} : \text{$<<$nil$>>$} \dashv \Gamma, \Delta}
+\]
+
+\[
+\text{T-Sequence} \quad \frac{\Gamma, \Delta \vdash S : <<nil>> \dashv \Gamma \text{'}, \Delta}{\Gamma, \Delta \vdash \text{{\{}} S \text{\}:} \text{$<<$nil$>>$} \dashv \Gamma, \Delta}
+\]
+
+
+\[
+\text{T-Block} \quad \frac{\Gamma, \Delta \vdash S_v : \text{$<<$nil$>>$} \dashv \Gamma \text{'} \quad \Gamma \text{'}, \Delta \vdash S_p : \text{$<<$nil$>>$} \dashv \Gamma \text{''}, \Delta }{\Gamma, \Delta \vdash \text{{\{}} \, S_v \, S_p \text{\}:} \text{$<<$nil$>>$} \dashv \Gamma, \Delta}
+\]
+
+% \newpage
+\section*{Typing Rules for Advanced Commands}
+
+{\large \text{Function declarations map to a store containing:} \par}
+{\large \{declaration evnironment, parameter names, parameter types, return type, body\}, and denoted by F in this context\par}
+\large \{type produced by f is represented as t_f and represents <<fn<t_r<t_1,...,t_n>>>>\par} 
+
+
+\[
+\text{T-Function Decl} \quad
+\frac{
+  \begin{array}{c}
+    F = (p_1,...p_n, t_1...t_n, t_r, body) \\[1ex]
+    t_1 \in \Delta ...t_n \in \Delta \\[1ex]
+    \Gamma \cup \{p_1 \rightarrow t_1\}...\Gamma \cup\{p_n \rightarrow t_n\} \\[1ex]
+    \Gamma \vdash S : <<nill>> \dashv \Gamma
+    
+  \end{array}
+}{
+  \Gamma, \Delta \vdash fun f(p_1:t_1,...,p_n:t_n): t_r \{S\}: <<nil>> \dashv \Gamma \cup \{\text{f} \mapsto F\}, \Delta \cup \{t_f \rightarrow F\}
+}
+\]
+
+{\large Continuing the above egample \par}
+
+\[
+\text{T-Function Call} \quad
+\frac{
+  \begin{array}{c}
+  f \in \Gamma \\[1ex]
+    \Gamma \vdash e_1 : t_1'...\Gamma \vdash e_n : t_n' \\[1ex]
+   f(\Bar{p_t}) = t_1,...,t_n  \\[1ex]
+    t_1' = t_1 ... t_n' = t_n \\[1ex]
+    
+  \end{array}
+}{
+  \Gamma \cup \{\text{f} \mapsto F\}, \Delta \cup \{t_f \rightarrow F\} \vdash f(e_1, ... e_n) : t_r \dashv \Gamma \cup \{\text{f} \mapsto F\}, \Delta \cup \{t_f \rightarrow F\}
+}
+\]
+
+% {\large Assuming F here, has returnType t and parameter types p\par}
+% {\large Then F will produce a type of $<<$fn$<$t$<$p$>>>>$\par}
+% {\large Lets call this user defined type ft\par}
+
+% \[
+% \text{T-First class Function assignment} \quad {\Gamma \{ f \mapsto F \} \vdash \text{var x: ft = f}: \text{$<<$nil$>>$} \dashv \Gamma  \text{'} \{ f \mapsto F \} \cup \{ x \mapsto F \}}
+% \]
+
+{\large where C holds the name of the declared class name, a map containing its fields, and another map containing its methods p\par}
+{\large Then C will produce a type of $<<$cls$<$class name$>>>$\par}
+{\large Furthermore, you cannot declare a method with name 'this'\par}
+{\large and any method with name 'init' cannot return anything other than $<<$class name$>>$, which is the instance type\par}
+{\large where v represents the fields and m represents the methods\par}
+
+\[
+\text{T-Class Declaration} \quad
+\frac{
+  \begin{array}{c}
+    C = (c, \Gamma_v, \Gamma_m) \\[1ex]
+    \Gamma_v \vdash \Bar{v} \dashv \Gamma_v \\[1ex]
+    c\_inst = (name, \Gamma_v', \Gamma_m), \text{deepcopy of field map is used but m map is the same}\\[1ex]
+    \Gamma_m \cup \{this \rightarrow c\_inst\} \\[1ex]
+    \Gamma_m \vdash \Bar{m} \dashv \Gamma_m \\[1ex]
+  \end{array}
+}{
+  \Gamma , \Delta \vdash \text{class c\{}\Bar{v}\Bar{m}\text{\}} : <<nil>> \dashv \Gamma \cup \{\text{c} \mapsto C\}, \Delta \cup \{t_c \rightarrow C\ \text{,} t_i \rightarrow c\_inst\}
+}
+\]
+
+% {\large if data held by C is denoted by C (name, \Gamma \text{f}, \Gamma \text{m} \} \par}
+
+% \[
+% \text{T-First class Class assignment} \quad { \Gamma \{c \mapsto  C \}\vdash \text{var x: $<<$cls$<$name$>>>$ = c}: <<nill>> \dashv \Gamma  \text{'} \cup \{ x \mapsto C \}}
+% \]
+
+{\large if data held by c is denoted by c = \(c, \Gamma_v, \Gamma_m\) then creating c instance produces \(c, \Gamma_v', \Gamma_m\) which has type $<<$c$>>$ \par}
+
+\[
+\text{T-Class Instance Creation} \quad
+\frac{
+  \begin{array}{c}
+    c \in \Gamma \\[1ex]
+    \Bar{t} \text{ range over parameter types of init} \\[1ex]
+    \Gamma \vdash e_1 : t_1'...\Gamma \vdash e_n : t_n' \\[1ex]
+    \Bar{t}_1 = t_1'...\Bar{t}_n = t_n'
+    
+  \end{array}
+}{
+  \Gamma \cup \{ c \rightarrow (c, \Gamma_v, \Gamma_m) \}, \Delta \vdash c(e_1,...e_n) \text{: $<<$c$>>$} \dashv \Gamma \cup \{ c \mapsto (c, \Gamma_v, \Gamma_m)\}, \Delta
+}
+\]
+
+\[
+\text{T-Class Instance Get} \quad
+\frac{
+  \begin{array}{c}
+    c\_inst \in \Gamma \\[1ex]
+    c\_inst = (name, \Gamma_v', \Gamma_m)\\[1ex]
+    g : t \\[1ex]
+    g \in \Gamma_v' \vee g \in \Gamma_m
+    
+  \end{array}
+}{
+  \Gamma \{ c\_inst \rightarrow (name, \Gamma_v', \Gamma_m) \}, \Delta \vdash c\_inst.g \text{: t} \dashv \Gamma \{ c\_inst \mapsto (name, \Gamma_v', \Gamma_m), \Delta}
+}
+\]
+
+\[
+\text{T-Class Instance Set} \quad
+\frac{
+  \begin{array}{c}
+    c\_inst \in \Gamma \\[1ex]
+    c\_inst = (name, \Gamma_v', \Gamma_m)\\[1ex]
+    s : t \\[1ex]
+    \Gamma \vdash e : t \\[1ex]
+    s \in \Gamma_v' \\[1ex]
+    
+  \end{array}
+}{
+  \Gamma \{ c\_inst \rightarrow (name, \Gamma_v', \Gamma_m) \}, \Delta \vdash c\_inst.s = \text{e}: t \dashv \Gamma, \Delta}
+}
+\]
+
+% {\large where a function maps to its tree node decl, decl env,  \par}
+
+% {\large parameter names, parameter types, return type (f\_t), body \par}
+
+% \[
+% \text{T-Instance Call} \quad \frac{\Gamma \{ c \_ inst \mapsto (class \_ c, \Gamma f, \Gamma m) \}\quad \text{f} \in  \Gamma \text{m} : \text{t}}{\Gamma \{ c \_inst \mapsto (class \_ c, \Gamma f, \Gamma m) \} \vdash \text{c\_inst.f(): f\_t} \dashv \Gamma \{ c \_inst \mapsto (class \_ c, \Gamma f, \Gamma m) \}}
+% \]
+
+
+\end{document}
